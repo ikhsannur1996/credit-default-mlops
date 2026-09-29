@@ -1,50 +1,56 @@
-import joblib
+import os
 import mlflow
 import mlflow.sklearn
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
 
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, f1_score
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(BASE, "data", "train.csv")
+FEATURES = ["age", "income", "loan_amount", "tenure"]
 
-FEATURES = [
-    "age", "income", "employment_years", "loan_amount",
-    "loan_term", "interest_rate", "credit_score",
-    "existing_loan", "monthly_installment", "debt_to_income",
-    "credit_utilization", "number_of_accounts",
-    "late_payment_count"
-]
-
-train = pd.read_csv("data/processed/train.csv")
-val = pd.read_csv("data/processed/validation.csv")
-
-model = Pipeline([
-    ("imputer", SimpleImputer(strategy="median")),
-    ("scaler", StandardScaler()),
-    ("model", LogisticRegression(max_iter=1000, class_weight="balanced"))
-])
-
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
 mlflow.set_experiment("credit-default")
 
-with mlflow.start_run() as run:
-    model.fit(train[FEATURES], train.default)
+df = pd.read_csv(DATA)
+X_train, X_test, y_train, y_test = train_test_split(
+    df[FEATURES], df["default"], test_size=0.25, random_state=42, stratify=df["default"]
+)
 
-    probability = model.predict_proba(val[FEATURES])[:, 1]
-    prediction = (probability >= 0.5).astype(int)
+model = RandomForestClassifier(
+    n_estimators=150, max_depth=6, random_state=42
+)
 
-    auc = roc_auc_score(val.default, probability)
-    f1 = f1_score(val.default, prediction)
+with mlflow.start_run(run_name="training"):
+    model.fit(X_train, y_train)
+    pred = model.predict(X_test)
+    prob = model.predict_proba(X_test)[:, 1]
 
-    mlflow.log_param("model", "logistic_regression")
-    mlflow.log_metric("roc_auc", auc)
-    mlflow.log_metric("f1", f1)
-    mlflow.sklearn.log_model(model, "model")
+    metrics = {
+        "accuracy": accuracy_score(y_test, pred),
+        "precision": precision_score(y_test, pred, zero_division=0),
+        "recall": recall_score(y_test, pred, zero_division=0),
+        "f1": f1_score(y_test, pred, zero_division=0),
+        "roc_auc": roc_auc_score(y_test, prob),
+        "pr_auc": average_precision_score(y_test, prob),
+    }
 
-    joblib.dump(model, "model/credit_default_model.joblib")
+    mlflow.log_params({
+        "model": "RandomForestClassifier",
+        "n_estimators": 150,
+        "max_depth": 6,
+        "random_state": 42,
+        "feature_count": len(FEATURES),
+    })
+    mlflow.log_metrics(metrics)
 
-    print(f"run_id={run.info.run_id}")
-    print(f"roc_auc={auc:.4f}")
-    print(f"f1={f1:.4f}")
+    mlflow.sklearn.log_model(
+        model,
+        name="credit_default_model",
+        registered_model_name="credit-default"
+    )
+
+    print("Training metrics:")
+    for k, v in metrics.items():
+        print(f"{k}: {v:.4f}")

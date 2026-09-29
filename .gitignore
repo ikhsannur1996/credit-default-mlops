@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+data/raw/*.csv
+data/processed/*.csv
+data/production_batch.csv
+model/*.joblib
+mlruns/
+artifacts/
+.pytest_cache/
+.DS_Store

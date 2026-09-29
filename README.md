@@ -63,3 +63,18 @@ Jupyter → Data → Train → MLflow → Model → FastAPI
 See `SETUP.md`.
 
 The project is deliberately small. It avoids PostgreSQL, Airflow, Kafka, MinIO, Terraform, ArgoCD, and multi-node Kubernetes.
+
+
+## Public IP access
+
+See `PUBLIC-IP.md` and `SETUP.md` for public VM access, UFW rules, provider firewall rules, and service URLs. Kubernetes API port 6443 is intentionally not exposed publicly.
+
+
+## Public Kubernetes monitoring
+
+Kubernetes monitoring is exposed through:
+
+- Grafana: `http://PUBLIC_IP:30300`
+- Prometheus: `http://PUBLIC_IP:30090`
+
+See `KUBERNETES-PUBLIC-MONITORING.md`.
